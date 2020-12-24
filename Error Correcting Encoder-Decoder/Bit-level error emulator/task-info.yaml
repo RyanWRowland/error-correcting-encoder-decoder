@@ -1,0 +1,244 @@
+type: edu
+custom_name: stage3
+files:
+- name: src/correcter/Main.java
+  visible: true
+  text: |
+    package correcter;
+
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println("Hello World!");
+        }
+    }
+  learner_created: false
+- name: test/CorrecterTest.java
+  visible: false
+  text: |
+    import correcter.Main;
+
+    import org.hyperskill.hstest.testcase.CheckResult;
+    import org.hyperskill.hstest.stage.StageTest;
+    import org.hyperskill.hstest.testcase.TestCase;
+
+    import java.io.*;
+    import java.util.List;
+
+    class TestClue {
+        String input;
+
+        TestClue(String input) {
+            this.input = input;
+        }
+    }
+
+    public class CorrecterTest extends StageTest<TestClue> {
+
+        public static File received = null;
+
+        public CorrecterTest() throws Exception {
+            super(Main.class);
+        }
+
+        @Override
+        public List<TestCase<TestClue>> generate() {
+            TestClue firstTestClue = new TestClue("Eat more of these french buns!");
+            TestClue secondTestClue = new TestClue("$ome rand0m messAge");
+            TestClue thirdTestClue = new TestClue("better call Saul 555-00-73!");
+            TestClue sixthTestClue = new TestClue("5548172 6548 225147 23656595 5155");
+
+            return List.of(
+                new TestCase<TestClue>()
+                    .setAttach(firstTestClue)
+                    .addFile("send.txt", firstTestClue.input),
+
+                new TestCase<TestClue>()
+                    .setAttach(secondTestClue)
+                    .addFile("send.txt", secondTestClue.input),
+
+                new TestCase<TestClue>()
+                    .setAttach(thirdTestClue)
+                    .addFile("send.txt", thirdTestClue.input),
+
+                new TestCase<TestClue>()
+                    .setAttach(sixthTestClue)
+                    .addFile("send.txt", sixthTestClue.input)
+            );
+        }
+
+        @Override
+        public CheckResult check(String reply, TestClue clue) {
+            String path = System.getProperty("user.dir");
+            searchFile("received.txt");
+
+            if (received == null) {
+                return new CheckResult(false,
+                    "Can't find received.txt file. " +
+                        "Make sure your program writes it down or " +
+                        "make sure the name of the file is correct.");
+            }
+
+            byte[] receivedContent;
+
+            FileInputStream stream;
+            try {
+                stream = new FileInputStream(received);
+            } catch (FileNotFoundException e) {
+                return new CheckResult(false,
+                    "Can't find received.txt file. " +
+                        "Make sure your program writes it down " +
+                        "or make sure the name of the file is correct.");
+            }
+
+            try {
+                receivedContent = stream.readAllBytes();
+            } catch (IOException e) {
+                throw new RuntimeException("Can't read the file");
+            }
+
+            String correctBinary = toBinary(clue.input.getBytes());
+            String outputBinary = toBinary(receivedContent);
+
+            return checkMatches(outputBinary, correctBinary);
+        }
+
+        private static String toBinary(byte[] bytes) {
+            StringBuilder sb = new StringBuilder(bytes.length * Byte.SIZE);
+            for (int i = 0; i < Byte.SIZE * bytes.length; i++) {
+                sb.append((bytes[i / Byte.SIZE] << i % Byte.SIZE & 0x80) == 0 ? '0' : '1');
+            }
+            return sb.toString();
+        }
+
+        private static byte[] fromBinary(String s) {
+            int sLen = s.length();
+            byte[] toReturn = new byte[(sLen + Byte.SIZE - 1) / Byte.SIZE];
+            char c;
+            for (int i = 0; i < sLen; i++)
+                if ((c = s.charAt(i)) == '1')
+                    toReturn[i / Byte.SIZE] = (byte) (toReturn[i / Byte.SIZE] | (0x80 >>> (i % Byte.SIZE)));
+                else if (c != '0')
+                    throw new IllegalArgumentException();
+            return toReturn;
+        }
+
+        private CheckResult checkMatches(String output, String correct) {
+            if (output.isEmpty() && correct.isEmpty()) return CheckResult.correct();
+
+            if (output.length() != correct.length()) {
+                return new CheckResult(false,
+                    "The program was expected to output " +
+                        correct.length() / 8 +
+                        " bytes, but output " +
+                        output.length() / 8);
+            }
+
+            for (int i = 0; i < output.length(); i += 8) {
+                String currOutputByte = output.substring(i, i+8);
+                String currCorrectByte = correct.substring(i, i+8);
+
+                int difference = 0;
+                for (int j = 0; j < currCorrectByte.length(); j++) {
+                    char currOutputBit = currOutputByte.charAt(j);
+                    char currCorrectBit = currCorrectByte.charAt(j);
+
+                    if (currCorrectBit != currOutputBit) {
+                        difference++;
+                    }
+                }
+
+                if (difference == 0) {
+                    return new CheckResult(false,
+                        "One of bytes from the input stayed the same but should be changed");
+                }
+
+                if (difference != 1) {
+                    return new CheckResult(false,
+                        "One of bytes from the input was changes in more than one bit");
+                }
+            }
+
+            return CheckResult.correct();
+        }
+
+        public static void searchFile(String fileName) {
+            File file = new File(fileName);
+            if (file.exists()) {
+                received = file;
+            }
+        }
+    }
+  learner_created: false
+- name: src/correcter/EncoderDecoder.java
+  visible: true
+  text: |
+    package correcter;
+
+    import java.util.Random;
+
+    public class EncoderDecoder {
+
+        public static String simulateErrors(String input) {
+            StringBuilder errorInput = new StringBuilder();
+            for (int i = 0; i < input.length(); i += 3) {
+                errorInput.append(introduceError(input.substring(i, Math.min(i + 3, input.length()))));
+            }
+            return errorInput.toString();
+        }
+
+        private static String introduceError(String subString) {
+            StringBuilder errorSubString = new StringBuilder(subString);
+            Random random = new Random();
+            // generate random number 0 - subString.length, this is the index to get an error
+            int errorIndex = random.nextInt(subString.length());
+            // generate random number 32 - 126, this is the error symbol that will replace the original symbol
+            char errorSymbol;
+            do {
+                errorSymbol = (char) (random.nextInt(126 - 32 + 1) + 32);
+            } while (errorSymbol == subString.charAt(errorIndex));
+            errorSubString.setCharAt(errorIndex, errorSymbol);
+            return errorSubString.toString();
+        }
+
+        public static String encode(String input) {
+            StringBuilder encodedInput = new StringBuilder();
+
+            for (char symbol : input.toCharArray()) {
+                for (int i = 0; i < 3; i++) {
+                    encodedInput.append(symbol);
+                }
+            }
+
+            return encodedInput.toString();
+        }
+
+        public static String decode(String input) {
+            if (input.length() % 3 != 0) {
+                return "Input not encoded.";
+            }
+
+            char[] inputArray = input.toCharArray();
+            StringBuilder decodedInput = new StringBuilder();
+            // every 3 symbols, get the common occurrence
+            for (int i = 0; i < inputArray.length; i += 3) {
+                if (inputArray[i] == inputArray[i + 1] || inputArray[i] == inputArray[i + 2]) {
+                    decodedInput.append(inputArray[i]);
+                } else {
+                    decodedInput.append(inputArray[i + 1]);
+                }
+            }
+
+            return decodedInput.toString();
+        }
+    }
+  learner_created: true
+- name: received.txt
+  visible: true
+  learner_created: true
+feedback_link: https://hyperskill.org/projects/58/stages/314/implement#comment
+status: Solved
+feedback:
+  message: Congratulations! Continue on <a href="https://hyperskill.org/projects/58/stages/314/implement">JetBrains
+    Academy</a>
+  time: Tue, 22 Dec 2020 01:35:38 UTC
+record: 3

@@ -1,0 +1,6 @@
+correcter/EncoderDecoder.java
+ correcter.EncoderDecoder
+correcter/HammingCode.java
+ correcter.HammingCode
+correcter/Main.java
+ correcter.Main
